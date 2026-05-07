@@ -11,9 +11,17 @@
 #include "keyboard.h"
 #include "process.h"
 #include "vfs.h"
+#include "elf.h"
 
 /* Syscall interface declaration */
 void syscall_init(void);
+
+/* Memory test declaration */
+void mem_test_run(void);
+
+/* Embedded test binary */
+extern u8 _binary_test_elf_bin_start;
+extern u8 _binary_test_elf_bin_end;
 
 /* Entry point from bootloader - receives Multiboot info */
 void kmain(void *multiboot_ptr) {
@@ -69,6 +77,9 @@ void kmain(void *multiboot_ptr) {
     kprintf("Initializing heap...\n");
     heap_init();
 
+    kprintf("Running memory stabilization tests...\n");
+    mem_test_run();
+
     kprintf("Initializing process manager...\n");
     process_init();
 
@@ -83,6 +94,16 @@ void kmain(void *multiboot_ptr) {
 
     kprintf("Initializing filesystem...\n");
     vfs_init(NULL);  /* No initrd mounted yet */
+
+    kprintf("Loading ELF loader smoke test...\n");
+    u32 elf_entry = elf_load(&_binary_test_elf_bin_start);
+    if (elf_entry) {
+        kprintf("ELF loaded successfully, entry point: %08X\n", elf_entry);
+        kprintf("Executing test ELF...\n");
+        ((void (*)(void))elf_entry)();
+    } else {
+        kprintf("ELF_LOADER_TEST: FAILED - elf_load returned 0\n");
+    }
 
     kprintf("\n");
     kprintf("=== Galio Kernel Fully Initialized ===\n");

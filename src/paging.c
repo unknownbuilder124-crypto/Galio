@@ -83,9 +83,9 @@ void paging_map(page_directory_t *pd, u32 vaddr, u32 paddr, u32 flags) {
         }
         
         pd->tables[pd_index] = (u32 *)pt_phys;
-        
+
         /* Clear the page table (write to physical address/virtual mapping) */
-        for (auto i = 0; i < 1024; ++i) {
+        for (int i = 0; i < 1024; ++i) {
             pd->tables[pd_index][i] = 0;
         }
         

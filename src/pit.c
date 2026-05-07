@@ -18,9 +18,9 @@ static void pit_handler(registers_t *regs) {
     ticks++;
 
     // Debug: show ticks every second (100 Hz PIT)
-    if (ticks % 100 == 0) {
-        kprintf("[debug] PIT tick=%u\n", ticks);
-    }
+    // if (ticks % 100 == 0) {
+    //     kprintf("[debug] PIT tick=%u\n", ticks);
+    // }
 
     if (user_callback) {
         user_callback();

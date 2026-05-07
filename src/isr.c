@@ -107,8 +107,6 @@ void irq_handler(registers_t *regs) {
     /* Debug: show which interrupt number arrived */
     kprintf("[irq] dispatch: int=%u\n", regs->interrupt_number);
 
-    u32 irq_no = regs->interrupt_number - 32;
-
     /* Send EOI to PIC */
     if (regs->interrupt_number >= 40) {
         outb(0xA0, 0x20); // Slave PIC EOI

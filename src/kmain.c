@@ -18,12 +18,12 @@ void syscall_init(void);
 /* Entry point from bootloader - receives Multiboot info */
 void kmain(void *multiboot_ptr) {
     (void)multiboot_ptr;  /* Mark as used to suppress warning */
-    
-    vga_init();
+
+    serial_init();
     kprintf("=== Galio Kernel Boot ===\n\n");
 
-    kprintf("Initializing serial port...\n");
-    serial_init();
+    kprintf("Initializing VGA...\n");
+    vga_init();
 
     kprintf("Initializing GDT...\n");
     gdt_init();
@@ -35,9 +35,32 @@ void kmain(void *multiboot_ptr) {
     irq_install();
 
     kprintf("Initializing physical memory manager...\n");
-    /* Parse Multiboot structure for memory info */
-    u32 mmap_addr = 0x9500;  /* Placeholder - would parse from Multiboot */
+
+    typedef struct {
+        u32 flags;
+        u32 mem_lower;
+        u32 mem_upper;
+        u32 boot_device;
+        u32 cmdline;
+        u32 mods_count;
+        u32 mods_addr;
+        u32 syms[4];
+        u32 mmap_length;
+        u32 mmap_addr;
+    } multiboot_info_t;
+
+    multiboot_info_t *mb_info = (multiboot_info_t *)multiboot_ptr;
+    u32 mmap_addr = 0;
     u32 mmap_length = 0;
+
+    if (mb_info && (mb_info->flags & (1 << 6))) {
+        mmap_addr = mb_info->mmap_addr;
+        mmap_length = mb_info->mmap_length;
+        kprintf("Found Multiboot mmap: addr=%x len=%u\n", mmap_addr, mmap_length);
+    } else {
+        kprintf("No Multiboot mmap available, using fallback\n");
+    }
+
     pmem_init(mmap_addr, mmap_length);
 
     kprintf("Initializing paging...\n");
@@ -71,12 +94,12 @@ void kmain(void *multiboot_ptr) {
 
     u32 last_print = 0;
     for (;;) {
-     __asm__ volatile("hlt");
+        __asm__ volatile("hlt");
 
-    u32 ticks = pit_get_ticks();
-    if (ticks - last_print >= 1000) {  // 1000 ticks = 10 seconds at 100 Hz
-        kernel_status();
-        last_print = ticks;
-    }
+        u32 ticks = pit_get_ticks();
+        if (ticks - last_print >= 100) {  // 100 ticks = 1 second at 100 Hz
+            kernel_status();
+            last_print = ticks;
+        }
     }
 }

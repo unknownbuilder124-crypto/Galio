@@ -21,8 +21,7 @@ void *memcpy(void *dest, const void *src, u32 n) {
 }
 
 void panic(const char *msg) {
-    vga_puts("KERNEL PANIC: ");
-    vga_puts(msg);
+    kprintf("KERNEL PANIC: %s\n", msg);
     for (;;) __asm__ volatile("cli; hlt");
 }
 

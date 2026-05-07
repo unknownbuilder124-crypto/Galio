@@ -1,0 +1,19 @@
+# create ISO (if you changed the kernel)
+rm -rf iso
+mkdir -p iso/boot/grub
+cp galio.bin iso/boot/galio.bin
+cat > iso/boot/grub/grub.cfg <<'EOF'
+set timeout=0
+set default=0
+
+menuentry "Galio Kernel" {
+  multiboot /boot/galio.bin
+  boot
+}
+EOF
+grub-mkrescue -o galio.iso iso
+
+# run and capture serial to serial.log (no GUI)
+qemu-system-i386 -cdrom galio.iso -m 128M -serial file:serial.log -monitor none -no-reboot
+# inspect output
+sed -n '1,200p' serial.log

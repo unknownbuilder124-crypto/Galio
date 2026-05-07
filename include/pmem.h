@@ -7,8 +7,11 @@
 /* Physical memory management */
 
 typedef struct {
-    u32 addr;
-    u32 len;
+    u32 size;
+    u32 addr_low;
+    u32 addr_high;
+    u32 len_low;
+    u32 len_high;
     u32 type;
 } mmap_entry_t;
 

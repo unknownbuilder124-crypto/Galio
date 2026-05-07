@@ -1,0 +1,25 @@
+# Build artifacts
+*.o
+*.bin
+*.iso
+*.elf
+*.img
+*.log
+
+# Generated dirs
+build/
+dist/
+
+# QEMU / debug
+serial.log
+build.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS junk
+.DS_Store
+Thumbs.db

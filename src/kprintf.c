@@ -1,10 +1,12 @@
 /* kprintf.c - kernel printf for debugging output */
 #include "kprintf.h"
 #include "vga.h"
+#include "serial.h"
 #include <stdarg.h>
 
 void putc(char c) {
     vga_putch(c);
+    serial_putc(c);
 }
 
 static void prints(const char *s) {

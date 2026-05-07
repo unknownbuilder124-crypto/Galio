@@ -4,7 +4,7 @@
 
 #define FRAME_SIZE 4096
 #define FRAMES_PER_BYTE 8
-#define BITMAP_SIZE (32 * 1024 * 1024 / FRAME_SIZE / 8)  /* For 32MB */
+#define BITMAP_SIZE (128 * 1024 * 1024 / FRAME_SIZE / 8)  /* For 128MB */
 
 static u8 frame_bitmap[BITMAP_SIZE] = {0};
 static u32 total_frames = 0;
@@ -49,25 +49,29 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
             total_frames++;
         }
     } else {
-        kprintf("Multiboot mmap: addr=%08X, len=%d\n", mmap_addr, mmap_length);
+        kprintf("Multiboot mmap: addr=%x, len=%d\n", mmap_addr, mmap_length);
         
         /* Parse Multiboot memory map */
         mmap_entry_t *entry = (mmap_entry_t *)mmap_addr;
         while ((u32)entry < mmap_addr + mmap_length) {
-            if (entry->type == MMAP_AVAILABLE) {
-                u32 start_frame = entry->addr / FRAME_SIZE;
-                u32 end_frame = (entry->addr + entry->len) / FRAME_SIZE;
-                
+            u32 addr = entry->addr_low;
+            u32 len = entry->len_low;
+            u32 next = (u32)entry + entry->size + sizeof(entry->size);
+
+            if (entry->type == MMAP_AVAILABLE && len > 0) {
+                u32 start_frame = addr / FRAME_SIZE;
+                u32 end_frame = (addr + len) / FRAME_SIZE;
+
                 for (u32 frame = start_frame; frame < end_frame; frame++) {
                     unset_frame(frame);
                     total_frames++;
                 }
-                
-                kprintf("  Available: %08X - %08X (%u MB)\n", 
-                        entry->addr, entry->addr + entry->len, entry->len / (1024*1024));
+
+                kprintf("  Available: %x - %x (%u MB)\n",
+                        addr, addr + len, len / (1024*1024));
             }
-            
-            entry = (mmap_entry_t *)((u32)entry + entry->addr + sizeof(u32));
+
+            entry = (mmap_entry_t *)next;
         }
     }
 
@@ -86,10 +90,14 @@ void pmem_init(u32 mmap_addr, u32 mmap_length) {
             total_frames * FRAME_SIZE / (1024 * 1024),
             kernel_frames * FRAME_SIZE / 1024,
             (total_frames - used_frames) * FRAME_SIZE / (1024 * 1024));
+
+    /* Mark frame 0 as used to avoid NULL pointer allocations */
+    set_frame(0);
+    used_frames++;
 }
 
 u32 pmem_alloc(size_t num_frames) {
-    for (u32 frame = 0; frame < total_frames; frame++) {
+    for (u32 frame = 0; frame < BITMAP_SIZE * 8; frame++) {
         if (!get_frame(frame)) {
             /* Check if we have enough contiguous frames */
             u8 found = 1;

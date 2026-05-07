@@ -6,8 +6,8 @@
 /* Paging structures and operations */
 
 typedef struct {
-    u32 *page_directory;
-    u32 *page_tables[1024];
+    u32 *directory;
+    u32 *tables[1024];
 } page_directory_t;
 
 /* Page table entry flags */

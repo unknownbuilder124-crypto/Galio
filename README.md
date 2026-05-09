@@ -34,10 +34,18 @@
 - System call interface (INT 0x80) with stubs for exec, fork, etc.
 - Virtual File System (VFS) layer with initrd support
 - Kernel printf with VGA and serial output
+- Interactive shell with polling-based keyboard input
+
+**ELF Loading**
+- ELF binary loader with proper 32-bit struct definitions
+- Page-by-page physical memory allocation for loaded segments
+- Support for PT_LOAD segments with proper error handling
+- Diagnostic output with actual memory addresses and sizes
 
 **Runtime Support**
 - C runtime helpers: memcpy, memset, panic
 - Kernel status reporting with uptime and process info
+- Memory stabilization tests
 - Idle loop with periodic status updates
 
 ---
@@ -60,13 +68,15 @@ From the project root:
 
 ```bash
 # Build kernel
-make
+make all 
 
 # Create GRUB ISO
-make iso
+chmod +x ./iso.sh
+./iso.sh
 
 # Run in QEMU with serial output
-qemu-system-i386 -cdrom galio.iso -m 128M -serial file:serial.log -monitor none -no-reboot
+chmod +x ./run.sh
+./run.sh
 
 # Or run with VGA window
 qemu-system-i386 -cdrom galio.iso -m 128M
@@ -142,6 +152,14 @@ qemu-system-i386 -cdrom galio.iso -m 128M
 
 ### Development Status
 
-✅ **Complete**: Boot, memory management, interrupts, drivers, processes  
-🔄 **Next Steps**: Userspace support, filesystem implementation, scheduler enhancements
+✅ **Complete**: Boot, memory management, interrupts, drivers, processes, ELF loading, shell  
+🔄 **Current**: Fixing paging and heap initialization for ELF segment loading  
+🔄 **Next Steps**: Complete userspace support, filesystem implementation, scheduler enhancements
 
+### Recent Updates (May 9, 2026)
+
+- **ELF Loader Overhaul**: Fixed ELF header struct alignment and field types; implemented proper page-by-page physical memory allocation for loaded segments
+- **Interactive Shell**: Replaced IRQ-driven keyboard with polling-based input for stable shell operation
+- **Memory Management**: Enhanced error handling and diagnostic output in PMM and paging subsystems
+- **Struct Definitions**: Corrected alignment issues in `elf_header_t` and `elf_program_header_t` with proper field sizes and removed unnecessary `__attribute__((packed))`
+- **Constants**: Added PT_* segment type constants and PAGE_* flag definitions for better code clarity

@@ -174,7 +174,7 @@ void kmain(void *multiboot_ptr) {
     outb(0xA1, 0xFF);  /* Slave PIC */
 
     /* Poll for 'c' key press using direct port I/O */
-    kprintf("Waiting for 'c' key...\n");
+   // kprintf("Waiting for 'c' key...\n");
     
     while (1) {
         u8 status = inb(0x64);

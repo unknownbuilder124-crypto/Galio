@@ -43,10 +43,10 @@ void serial_init(void) {
 }
 
 void serial_putc(char c) {
-    /* Wait for TX FIFO to have space */
-    while ((inb(COM1_PORT + UART_LINE_STATUS) & UART_LS_EMPTY_THR) == 0);
-    
-    outb(COM1_PORT + UART_DATA, (u8)c);
+    /* Non-blocking: only write if TX FIFO has space */
+    if ((inb(COM1_PORT + UART_LINE_STATUS) & UART_LS_EMPTY_THR)) {
+        outb(COM1_PORT + UART_DATA, (u8)c);
+    }
 }
 
 void serial_puts(const char *s) {

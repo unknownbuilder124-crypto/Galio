@@ -16,7 +16,27 @@
 static u8 shift_pressed = 0;
 static u8 ctrl_pressed = 0;
 static u8 alt_pressed = 0;
+static u8 extended_prefix = 0;
 static key_callback_t user_callback = NULL;
+
+static int handle_arrow_key(u8 scancode) {
+    switch (scancode) {
+        case 0x48: /* Up */
+            vga_move_cursor(0, -1);
+            return 1;
+        case 0x50: /* Down */
+            vga_move_cursor(0, 1);
+            return 1;
+        case 0x4B: /* Left */
+            vga_move_cursor(-1, 0);
+            return 1;
+        case 0x4D: /* Right */
+            vga_move_cursor(1, 0);
+            return 1;
+        default:
+            return 0;
+    }
+}
 
 /* Scancode to ASCII lookup table (without shift) */
 static const u8 scancode_table[] = {
@@ -46,24 +66,41 @@ static void keyboard_handler(registers_t *regs) {
     (void)regs;
     u8 scancode = inb(KEYBOARD_DATA);
     u8 is_pressed = !(scancode & 0x80);
-    scancode &= 0x7F;
+
+    if (scancode == 0xE0) {
+        extended_prefix = 1;
+        return;
+    }
+
+    u8 raw_scancode = scancode & 0x7F;
+
+    if (extended_prefix) {
+        extended_prefix = 0;
+        if (is_pressed && handle_arrow_key(raw_scancode)) {
+            return;
+        }
+    }
+
+    if (is_pressed && handle_arrow_key(raw_scancode)) {
+        return;
+    }
 
     /* Track modifier keys */
-    if (scancode == LSHIFT_PRESSED || scancode == RSHIFT_PRESSED) {
+    if (raw_scancode == LSHIFT_PRESSED || raw_scancode == RSHIFT_PRESSED) {
         shift_pressed = is_pressed;
-    } else if (scancode == LCTRL_PRESSED) {
+    } else if (raw_scancode == LCTRL_PRESSED) {
         ctrl_pressed = is_pressed;
-    } else if (scancode == LALT_PRESSED) {
+    } else if (raw_scancode == LALT_PRESSED) {
         alt_pressed = is_pressed;
     }
 
     if (user_callback) {
-        user_callback(scancode, is_pressed);
+        user_callback(raw_scancode, is_pressed);
     }
 
     /* Echo to screen if key pressed */
-    if (is_pressed && scancode < 60) {
-        u8 ascii = shift_pressed ? scancode_table_shift[scancode] : scancode_table[scancode];
+    if (is_pressed && raw_scancode < 60) {
+        u8 ascii = shift_pressed ? scancode_table_shift[raw_scancode] : scancode_table[raw_scancode];
         if (ascii > 0) {
             vga_putch(ascii);
         }

@@ -421,10 +421,10 @@ u32 vfs_mkdir(const char *path) {
     }
     norm_path_copy[i] = 0;
 
-    kprintf("[VFS_DEBUG] vfs_mkdir: input path=%s, normalized=%s\n", path, norm_path_copy);
+   // kprintf("[VFS_DEBUG] vfs_mkdir: input path=%s, normalized=%s\n", path, norm_path_copy);
 
     if (vfs_find(norm_path_copy)) {
-        kprintf("[VFS] ERROR: Directory already exists: %s\n", norm_path_copy);
+        kprintf("Directory already exists: %s\n", norm_path_copy);
         return 0;
     }
 
@@ -442,7 +442,7 @@ u32 vfs_mkdir(const char *path) {
     }
     parent_copy[i] = 0;
 
-    kprintf("[VFS_DEBUG] vfs_mkdir: parent=%s\n", parent_copy);
+   // kprintf("[VFS_DEBUG] vfs_mkdir: parent=%s\n", parent_copy);
     if (__builtin_strcmp(parent_copy, "/") != 0 && !vfs_find(parent_copy)) {
         kprintf("[VFS] ERROR: Parent directory does not exist: %s\n", parent_copy);
         return 0;
@@ -457,7 +457,7 @@ u32 vfs_mkdir(const char *path) {
         i++;
     }
     new_entry->path[i] = 0;
-    kprintf("[VFS_DEBUG] vfs_mkdir: entry path set to=%s\n", new_entry->path);
+    //kprintf("[VFS_DEBUG] vfs_mkdir: entry path set to=%s\n", new_entry->path);
 
     new_entry->size = 0;
     new_entry->offset = 0;

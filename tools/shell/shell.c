@@ -77,17 +77,31 @@ static void shell_execute_command(void) {
     if (strncmp(input.buffer, "clear", 5) == 0) {
         vga_clear();
     } else if (strncmp(input.buffer, "help", 4) == 0) {
-        kprintf("Galio Kernel Shell - Available Commands:\n");
-        kprintf("  ls       - List directory contents\n");
-        kprintf("  mkdir    - Create directory (usage: mkdir <path>)\n");
-        kprintf("  rmdir    - Remove directory (usage: rmdir <path>)\n");
-        kprintf("  clear    - Clear the screen\n");
-        kprintf("  echo     - Echo text (usage: echo <text>)\n");
-        kprintf("  uname    - Show system name\n");
-        kprintf("  pwd      - Print current directory\n");
-        kprintf("  goto     - Change directory (usage: goto <path>)\n");
-        kprintf("  back     - Go back to previous directory\n");
-        kprintf("Use UP/DOWN arrows to navigate history\n");
+        kprintf("\n____________________________________________________________________\n");
+        kprintf(" |                     GSH  - Available Commands:                   |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  ls       - List directory contents                              |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  mkdir    - Create directory (usage: mkdir <path>)               |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  rmdir    - Remove directory (usage: rmdir <path>)               |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" | clear    - Clear the screen                                      |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  echo     - Echo text (usage: echo <text>)                       |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  uname    - Show system name                                     |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" | pwd      - Print current directory                               |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  goto     - Change directory (usage: goto <path>)                |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  back     - Go back to previous directory                        |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  Use UP/DOWN arrows to navigate history                          |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |      *****    NEXT TIME HELP YOURSELF    *****                   |\n");
+        kprintf(" |__________________________________________________________________|\n");
     } else if (strncmp(input.buffer, "ls", 2) == 0) {
         vfs_listdir(current_dir);
     } else if (strncmp(input.buffer, "mkdir ", 6) == 0) {
@@ -152,7 +166,7 @@ static void shell_execute_command(void) {
             }
             strncpy(current_dir, fullpath, 255);
             current_dir[255] = 0;
-            kprintf("[DEBUG] goto: current_dir now='%s'\n", current_dir);
+           // kprintf("[DEBUG] goto: current_dir now='%s'\n", current_dir);
         } else {
             kprintf("Directory not found: %s\n", fullpath);
         }
@@ -172,7 +186,7 @@ static void shell_execute_command(void) {
         kprintf("Unknown command: %s\nType 'help' for available commands\n", input.buffer);
     }
 
-    kprintf("[@%s] ", current_dir);
+    kprintf("[@~G ->  %s] ", current_dir);
     input.len = 0;
 }
 
@@ -255,7 +269,7 @@ void shell_run(void) {
     input.len = 0;
 
     vga_clear();
-    kprintf("Welcome to GSh \n");
+    kprintf("[@~G ->]  Welcome to GSh \n");
     //kprintf("Use UP/DOWN arrows to navigate history\n");
     kprintf("[@~G ->  %s] ", current_dir);
 

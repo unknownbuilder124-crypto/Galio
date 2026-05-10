@@ -70,13 +70,13 @@ static file_spec_t files[] = {
         49, 0},
 
     /* System files */
-    {"/etc/hostname", "galio-kernel\n", 14, 0},
+    {"/etc/hostname", "galio\n", 14, 0},
 
     {"/etc/os-release",
-        "NAME=\"Galio OS\"\n"
+        "NAME=\"Galio \"\n"
         "VERSION=\"0.1.0\"\n"
         "ID=\"galio\"\n"
-        "PRETTY_NAME=\"Galio OS 0.1.0\"\n",
+        "PRETTY_NAME=\"Galio 0.1.0\"\n",
         79, 0},
 
     {"/etc/issue",
@@ -99,7 +99,7 @@ static file_spec_t files[] = {
     /* Boot banner */
     {"/boot/banner.txt",
         "=====================================\n"
-        "  Galio Operating System Kernel\n"
+        "  Galio  Kernel\n"
         "  Version: 0.1.0 (Alpha)\n"
         "  Architecture: x86 32-bit\n"
         "  Bootloader: GRUB Multiboot\n"

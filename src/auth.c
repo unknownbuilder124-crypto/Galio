@@ -83,7 +83,7 @@ void auth_show_login_prompt(void) {
     kprintf("\n");
     kprintf("╔══════════════════════════════════════════════════════════════╗\n");
     kprintf("║           Galio Kernel Registration                          ║\n");
-    kprintf("║          Create a kernel account for privileged access       ║\n");
+    kprintf("║          Create a kernel account for galio                   ║\n");
     kprintf("╚══════════════════════════════════════════════════════════════╝\n");
     kprintf("\n");
 }

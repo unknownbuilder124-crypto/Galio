@@ -3,7 +3,7 @@
 #include "kprintf.h"
 #include "string.h"
 
-static vfs_header_t *vfs_root = NULL;
+vfs_header_t *vfs_root = NULL;  
 static u32 total_files = 0;
 static u32 total_size = 0;
 
@@ -91,6 +91,10 @@ u32 vfs_read(const char *path, void *buffer, u32 size) {
         return 0;
     }
 
+    if (entry->size == 0) {
+        return 0;  /* Empty file, nothing to read */
+    }
+
     u32 to_read = (size < entry->size) ? size : entry->size;
     u8 *src = (u8 *)vfs_root + entry->offset;
     u8 *dst = (u8 *)buffer;
@@ -131,7 +135,6 @@ static u32 path_depth(const char *path) {
 
 const char *vfs_basename(const char *path) {
     static char buf[VFS_MAX_FILENAME];
-    const char *src = path;
     int i = __builtin_strlen(path) - 1;
 
     while (i > 0 && path[i] != '/') i--;
@@ -166,7 +169,6 @@ void vfs_listdir(const char *path) {
 
     kprintf("Directory listing: %s\n", norm_path);
 
-    u32 count = 0;
     u32 dir_count = 0;
     u32 file_count = 0;
     u32 total_dir_size = 0;
@@ -185,7 +187,6 @@ void vfs_listdir(const char *path) {
                 file_count++;
                 total_dir_size += e->size;
             }
-            count++;
         }
     }
 
@@ -202,9 +203,6 @@ void vfs_listall(void) {
 
     kprintf("[VFS] Complete filesystem tree:\n");
     kprintf("================================================================\n");
-
-    u32 depth_stack[32];
-    u32 last_depth = 0;
 
     for (u32 i = 0; i < vfs_root->entry_count; i++) {
         vfs_entry_t *e = &vfs_root->entries[i];
@@ -417,8 +415,6 @@ u32 vfs_mkdir(const char *path) {
     }
     norm_path_copy[i] = 0;
 
-   // kprintf("[VFS_DEBUG] vfs_mkdir: input path=%s, normalized=%s\n", path, norm_path_copy);
-
     if (vfs_find(norm_path_copy)) {
         kprintf("Directory already exists: %s\n", norm_path_copy);
         return 0;
@@ -438,7 +434,6 @@ u32 vfs_mkdir(const char *path) {
     }
     parent_copy[i] = 0;
 
-   // kprintf("[VFS_DEBUG] vfs_mkdir: parent=%s\n", parent_copy);
     if (__builtin_strcmp(parent_copy, "/") != 0 && !vfs_find(parent_copy)) {
         kprintf("[VFS] ERROR: Parent directory does not exist: %s\n", parent_copy);
         return 0;
@@ -453,7 +448,6 @@ u32 vfs_mkdir(const char *path) {
         i++;
     }
     new_entry->path[i] = 0;
-    //kprintf("[VFS_DEBUG] vfs_mkdir: entry path set to=%s\n", new_entry->path);
 
     new_entry->size = 0;
     new_entry->offset = 0;
@@ -492,10 +486,13 @@ u32 vfs_create(const char *path, u8 force) {
             kprintf("[VFS] Use 'new file %s' to replace it.\n", norm_path_copy);
             return 0;
         }
-
+        /* Clear existing file content */
         existing->size = 0;
-        existing->offset = 0;
-        existing->permissions = 0644;
+        /* Clear the data area */
+        u8 *data_area = (u8 *)vfs_root + existing->offset;
+        for (u32 j = 0; j < 4096; j++) {
+            data_area[j] = 0;
+        }
         kprintf("[VFS] Replaced file: %s\n", norm_path_copy);
         return 1;
     }
@@ -511,6 +508,14 @@ u32 vfs_create(const char *path, u8 force) {
         return 0;
     }
 
+    /* Calculate new data offset at the end of all existing data */
+    u32 new_offset = vfs_root->data_offset;
+    for (u32 j = 0; j < vfs_root->entry_count; j++) {
+        if (!vfs_root->entries[j].is_dir) {
+            new_offset += vfs_root->entries[j].size;
+        }
+    }
+
     u32 idx = vfs_root->entry_count;
     vfs_entry_t *new_entry = &vfs_root->entries[idx];
     i = 0;
@@ -519,13 +524,20 @@ u32 vfs_create(const char *path, u8 force) {
         i++;
     }
     new_entry->path[i] = 0;
-    new_entry->size = 0;
-    new_entry->offset = 0;
+    new_entry->size = 4096;  /* Default size */
+    new_entry->offset = new_offset;
     new_entry->is_dir = 0;
     new_entry->permissions = 0644;
     vfs_root->entry_count++;
 
-    kprintf("[VFS] Created file: %s\n", norm_path_copy);
+    /* Clear the new file data area */
+    u8 *data_area = (u8 *)vfs_root + new_offset;
+    for (u32 j = 0; j < 4096; j++) {
+        data_area[j] = 0;
+    }
+
+    kprintf("[VFS] Created file: %s (size=%u bytes, offset=0x%x)\n", 
+            norm_path_copy, new_entry->size, new_entry->offset);
     return 1;
 }
 
@@ -567,7 +579,6 @@ u32 vfs_rmdir(const char *path) {
         }
     }
 
-    entry->size = 0;
     entry->is_dir = 0;
     kprintf("[VFS] Removed directory: %s\n", norm_path_copy);
     return 1;

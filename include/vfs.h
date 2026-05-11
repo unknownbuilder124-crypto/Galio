@@ -49,6 +49,8 @@ void vfs_listdir(const char *path);
 /* List all files in filesystem */
 void vfs_listall(void);
 
+extern vfs_header_t *vfs_root;
+
 /* Get entry info */
 u32 vfs_size(const char *path);
 u32 vfs_is_dir(const char *path);

@@ -10,6 +10,9 @@
 #include "auth.h"
 #include "commands/new.h"
 #include "commands/file.h"
+#include "commands/write.h"
+#include "commands/show.h"
+#include "editor/editor.h"
 #define SHELL_BUFFER_SIZE 256
 #define HISTORY_SIZE 10
 #define HISTORY_BUFFER_SIZE 256
@@ -131,6 +134,15 @@ static void shell_execute_command(void) {
         shell_file_command(input.buffer + 5, current_dir, 0);
     } else if (strcmp(input.buffer, "file") == 0) {
         shell_file_command("", current_dir, 0);
+    } else if (strncmp(input.buffer, "write ", 6) == 0) {
+        shell_write_command(input.buffer + 6, current_dir);
+    } else if (strcmp(input.buffer, "write") == 0) {
+        shell_write_command("", current_dir);
+    } else if (strncmp(input.buffer, "show ", 5) == 0) {
+        shell_show_command(input.buffer + 5, current_dir);
+    } else if (strcmp(input.buffer, "show") == 0) {
+        kprintf("[SHOW] Usage: show <filepath>\n");
+        kprintf("[SHOW] Example: show /home/Desktop/file.txt\n");
     } else if (strncmp(input.buffer, "clear", 5) == 0) {
         vga_clear();
         kprintf("                                GSH                                  \n");
@@ -153,6 +165,10 @@ static void shell_execute_command(void) {
         kprintf(" |  new file - Create or replace file (usage: new file              |\n");
         kprintf(" |         <name>[.ext] [path])                                     |\n");
         kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  write    - Write/edit file (usage: write <name> [path])         |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  show     - Display file contents (usage: show <filepath>)       |\n");
+        kprintf(" |__________________________________________________________________|\n");
         kprintf(" | clear    - Clear the screen                                      |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  echo     - Echo text (usage: echo <text>)                       |\n");
@@ -163,7 +179,7 @@ static void shell_execute_command(void) {
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  goto     - Change directory (usage: goto <path>)                |\n");
         kprintf(" |__________________________________________________________________|\n");
-        kprintf(" |  back     - Go back to previous directory                        |\n");
+        kprintf(" |  back     - Go back to previous dir (usage: back [path])         |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  rex      - Privileged command                                   |\n");
         kprintf(" |            gain full access of your device.                      |\n");
@@ -194,7 +210,6 @@ static void shell_execute_command(void) {
             }
             strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
         }
-        //kprintf("[DEBUG] mkdir: current_dir='%s', dirname='%s', fullpath='%s'\n", current_dir, dirname, fullpath);
         vfs_mkdir(fullpath);
     } else if (strncmp(input.buffer, "rmdir ", 6) == 0) {
         const char *dirname = input.buffer + 6;
@@ -246,12 +261,35 @@ static void shell_execute_command(void) {
             kprintf("Directory not found: %s\n", fullpath);
         }
     } else if (strncmp(input.buffer, "back", 4) == 0) {
-        if (dir_history.sp > 0) {
-            dir_history.sp--;
-            strncpy(current_dir, dir_history.stack[dir_history.sp], 255);
-            current_dir[255] = 0;
+        const char *target = input.buffer + 4;
+        while (*target == ' ') target++;
+
+        if (*target == 0) {
+            if (dir_history.sp > 0) {
+                dir_history.sp--;
+                strncpy(current_dir, dir_history.stack[dir_history.sp], 255);
+                current_dir[255] = 0;
+            } else {
+                kprintf("No previous directory\n");
+            }
         } else {
-            kprintf("No previous directory\n");
+            if (strcmp(target, "/") == 0) {
+                kprintf("Permission denied: use 'rex goto /' to access root\n");
+            } else {
+                u32 found = 0;
+                for (u32 i = 0; i < dir_history.sp; i++) {
+                    if (strcmp(dir_history.stack[i], target) == 0) {
+                        dir_history.sp = i;
+                        strncpy(current_dir, dir_history.stack[i], 255);
+                        current_dir[255] = 0;
+                        found = 1;
+                        break;
+                    }
+                }
+                if (!found) {
+                    kprintf("Directory not in history: %s\n", target);
+                }
+            }
         }
     } else if (strncmp(input.buffer, "echo ", 5) == 0) {
         kprintf("%s\n", input.buffer + 5);

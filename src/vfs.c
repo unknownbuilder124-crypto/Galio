@@ -400,7 +400,7 @@ void vfs_tree(void) {
     kprintf("================================================================\n");
 }
 
-u32 vfs_mkdir(const char *path) {
+u32 vfs_mkdir(const char *path, u8 force) {
     if (!vfs_root) {
         kprintf("[VFS] ERROR: Filesystem not mounted\n");
         return 0;
@@ -415,9 +415,18 @@ u32 vfs_mkdir(const char *path) {
     }
     norm_path_copy[i] = 0;
 
-    if (vfs_find(norm_path_copy)) {
-        kprintf("Directory already exists: %s\n", norm_path_copy);
-        return 0;
+    vfs_entry_t *existing = vfs_find(norm_path_copy);
+    if (existing) {
+        if (!existing->is_dir) {
+            kprintf("[VFS] ERROR: Path exists and is not a directory: %s\n", norm_path_copy);
+            return 0;
+        }
+        if (!force) {
+            kprintf("Directory already exists: %s\n", norm_path_copy);
+            return 0;
+        }
+        kprintf("[VFS] Replaced directory: %s\n", norm_path_copy);
+        return 1;
     }
 
     if (vfs_root->entry_count >= VFS_MAX_FILES) {

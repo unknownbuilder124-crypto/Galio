@@ -81,6 +81,92 @@ static void shell_print_buffer(void) {
     }
 }
 
+static const char *shell_basename(const char *path) {
+    const char *base = path;
+    while (*path) {
+        if (*path == '/') base = path + 1;
+        path++;
+    }
+    return base;
+}
+
+u8 shell_dir_command(const char *args, const char *current_dir, u8 replace) {
+    if (!args || *args == 0) {
+        kprintf("[DIR] Usage: dir <name> [name...]\n");
+        return 0;
+    }
+
+    char local[512];
+    strncpy(local, args, sizeof(local) - 1);
+    local[sizeof(local) - 1] = 0;
+
+    char *ptr = local;
+    u8 any_success = 0;
+
+    while (*ptr) {
+        while (*ptr == ' ') ptr++;
+        if (*ptr == 0) break;
+
+        char *end = ptr;
+        while (*end && *end != ' ') end++;
+
+        char saved_char = *end;
+        *end = 0;
+
+        char fullpath[256];
+        if (ptr[0] == '/') {
+            strncpy(fullpath, ptr, sizeof(fullpath) - 1);
+            fullpath[sizeof(fullpath) - 1] = 0;
+        } else {
+            strncpy(fullpath, current_dir, sizeof(fullpath) - 1);
+            fullpath[sizeof(fullpath) - 1] = 0;
+            int len = strlen(fullpath);
+            if (len > 0 && fullpath[len - 1] != '/') {
+                strncat(fullpath, "/", sizeof(fullpath) - len - 1);
+            }
+            strncat(fullpath, ptr, sizeof(fullpath) - strlen(fullpath) - 1);
+        }
+
+        char parent[256];
+        const char *parent_path = fullpath;
+        int parent_len = strlen(parent_path) - 1;
+        while (parent_len > 0 && parent_path[parent_len] != '/') parent_len--;
+        if (parent_len <= 0) {
+            strncpy(parent, "/", sizeof(parent) - 1);
+            parent[sizeof(parent) - 1] = 0;
+        } else {
+            if (parent_len >= (int)sizeof(parent)) parent_len = sizeof(parent) - 1;
+            memcpy(parent, parent_path, parent_len);
+            parent[parent_len] = 0;
+        }
+
+        if (!vfs_is_dir(parent)) {
+            kprintf("[DIR] Directory does not exist: %s\n", parent);
+            *end = saved_char;
+            ptr = end + 1;
+            continue;
+        }
+
+        vfs_entry_t *existing = vfs_find(fullpath);
+        if (existing) {
+            if (!existing->is_dir) {
+                kprintf("[DIR] Path exists and is not a directory: %s\n", fullpath);
+            } else if (!replace) {
+                kprintf("[DIR] Directory already exists: %s. Use 'rex dir %s' to replace.\n", fullpath, fullpath);
+            } else {
+                if (vfs_mkdir(fullpath, 1)) any_success = 1;
+            }
+        } else {
+            if (vfs_mkdir(fullpath, replace)) any_success = 1;
+        }
+
+        *end = saved_char;
+        ptr = end + 1;
+    }
+
+    return any_success;
+}
+
 /* Parse and execute command */
 static void shell_execute_command(void) {
     if (input.len == 0) return;
@@ -123,6 +209,30 @@ static void shell_execute_command(void) {
             }
             current_dir[255] = 0;
             kprintf("[REX] Changed to: %s\n", current_dir);
+        } else if (strncmp(cmd, "file", 4) == 0) {
+            const char *file_args = cmd + 4;
+            if (*file_args == ' ') file_args++;
+            shell_file_command(file_args, current_dir, 1);
+        } else if (strncmp(cmd, "new file", 8) == 0) {
+            const char *file_args = cmd + 8;
+            if (*file_args == ' ') file_args++;
+            shell_file_command(file_args, current_dir, 1);
+        } else if (strncmp(cmd, "dir", 3) == 0) {
+            const char *dir_args = cmd + 3;
+            if (*dir_args == ' ') dir_args++;
+            shell_dir_command(dir_args, current_dir, 1);
+        } else if (strncmp(cmd, "new dir", 7) == 0) {
+            const char *dir_args = cmd + 7;
+            if (*dir_args == ' ') dir_args++;
+            shell_dir_command(dir_args, current_dir, 1);
+        } else if (strncmp(cmd, "mkdir", 5) == 0) {
+            const char *dir_args = cmd + 5;
+            if (*dir_args == ' ') dir_args++;
+            shell_dir_command(dir_args, current_dir, 1);
+        } else if (strncmp(cmd, "new mkdir", 9) == 0) {
+            const char *dir_args = cmd + 9;
+            if (*dir_args == ' ') dir_args++;
+            shell_dir_command(dir_args, current_dir, 1);
         } else {
             kprintf("[REX] Unknown privileged command: %s\n", cmd);
         }
@@ -156,14 +266,19 @@ static void shell_execute_command(void) {
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  ls       - List directory contents                              |\n");
         kprintf(" |__________________________________________________________________|\n");
-        kprintf(" |  mkdir    - Create directory (usage: mkdir <path>)               |\n");
+        kprintf(" |  dir      - Create directory (usage: dir <name> [name...])        |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  rmdir    - Remove directory (usage: rmdir <path>)               |\n");
         kprintf(" |__________________________________________________________________|\n");
-        kprintf(" |  file     - Create file (usage: file <name>[.ext] [path])        |\n");
+        kprintf(" |  file     - Create file (usage: file <name>[.ext] [name...]   |\n");
+        kprintf(" |             file <path/to/name>[.ext] [path...]              |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  new file - Create or replace file (usage: new file              |\n");
-        kprintf(" |         <name>[.ext] [path])                                     |\n");
+        kprintf(" |             <name>[.ext] [name...] or new file                   |\n");
+        kprintf(" |             <path/to/name>[.ext] [path...]                     |\n");
+        kprintf(" |__________________________________________________________________|\n");
+        kprintf(" |  new dir  - Create directory (usage: new dir <name> [name...])    |\n");
+        kprintf(" |             Use 'rex new dir' to replace existing directory.     |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  write    - Write/edit file (usage: write <name> [path])         |\n");
         kprintf(" |__________________________________________________________________|\n");
@@ -179,7 +294,7 @@ static void shell_execute_command(void) {
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  goto     - Change directory (usage: goto <path>)                |\n");
         kprintf(" |__________________________________________________________________|\n");
-        kprintf(" |  back     - Go back to previous dir (usage: back [path])         |\n");
+        kprintf(" |  back     - Go back to a previous dir (usage: back [dirname])    |\n");
         kprintf(" |__________________________________________________________________|\n");
         kprintf(" |  rex      - Privileged command                                   |\n");
         kprintf(" |            gain full access of your device.                      |\n");
@@ -194,23 +309,14 @@ static void shell_execute_command(void) {
         kprintf("\n");
     } else if (strncmp(input.buffer, "ls", 2) == 0) {
         vfs_listdir(current_dir);
+    } else if (strncmp(input.buffer, "dir ", 4) == 0) {
+        shell_dir_command(input.buffer + 4, current_dir, 0);
+    } else if (strcmp(input.buffer, "dir") == 0) {
+        shell_dir_command("", current_dir, 0);
     } else if (strncmp(input.buffer, "mkdir ", 6) == 0) {
-        const char *dirname = input.buffer + 6;
-        char fullpath[256];
-
-        if (dirname[0] == '/') {
-            strncpy(fullpath, dirname, 255);
-            fullpath[255] = 0;
-        } else {
-            strncpy(fullpath, current_dir, 255);
-            fullpath[255] = 0;
-            int len = strlen(fullpath);
-            if (len > 0 && fullpath[len-1] != '/') {
-                strncat(fullpath, "/", 255 - len - 1);
-            }
-            strncat(fullpath, dirname, 255 - strlen(fullpath) - 1);
-        }
-        vfs_mkdir(fullpath);
+        shell_dir_command(input.buffer + 6, current_dir, 0);
+    } else if (strcmp(input.buffer, "mkdir") == 0) {
+        shell_dir_command("", current_dir, 0);
     } else if (strncmp(input.buffer, "rmdir ", 6) == 0) {
         const char *dirname = input.buffer + 6;
         char fullpath[256];
@@ -277,10 +383,12 @@ static void shell_execute_command(void) {
                 kprintf("Permission denied: use 'rex goto /' to access root\n");
             } else {
                 u32 found = 0;
-                for (u32 i = 0; i < dir_history.sp; i++) {
-                    if (strcmp(dir_history.stack[i], target) == 0) {
-                        dir_history.sp = i;
-                        strncpy(current_dir, dir_history.stack[i], 255);
+                for (u32 i = dir_history.sp; i > 0; i--) {
+                    u32 idx = i - 1;
+                    if (strcmp(dir_history.stack[idx], target) == 0 ||
+                        strcmp(shell_basename(dir_history.stack[idx]), target) == 0) {
+                        dir_history.sp = idx;
+                        strncpy(current_dir, dir_history.stack[idx], 255);
                         current_dir[255] = 0;
                         found = 1;
                         break;

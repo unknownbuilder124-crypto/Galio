@@ -524,7 +524,7 @@ u32 vfs_create(const char *path, u8 force) {
         i++;
     }
     new_entry->path[i] = 0;
-    new_entry->size = 4096;  /* Default size */
+    new_entry->size = 0;  /* Start with empty file */
     new_entry->offset = new_offset;
     new_entry->is_dir = 0;
     new_entry->permissions = 0644;

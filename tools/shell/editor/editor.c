@@ -72,7 +72,8 @@ static u32 vfs_write_file(const char *path, const u8 *data, u32 size) {
 }
 
 static void editor_handle_key(editor_buffer_t *buf, u8 scancode, u8 is_pressed, 
-                               u8 *save_flag, u8 *exit_flag) {
+                               u8 *save_flag, u8 *exit_flag, u8 *buffer_changed) {
+    *buffer_changed = 0;
     if (!is_pressed) return;
     
     u8 raw = scancode & 0x7F;
@@ -97,19 +98,25 @@ static void editor_handle_key(editor_buffer_t *buf, u8 scancode, u8 is_pressed,
     if (c == '\b') {
         if (buf->size > 0) {
             buf->size--;
+            kprintf("\b \b");
+            *buffer_changed = 1;
         }
     } else if (c == '\n') {
         if (buf->size < EDITOR_BUFFER_SIZE - 1) {
             buf->content[buf->size++] = '\n';
+            kprintf("\n");
+            *buffer_changed = 1;
         }
     } else if (c >= 32 && c < 127) {
         if (buf->size < EDITOR_BUFFER_SIZE - 1) {
             buf->content[buf->size++] = c;
+            kprintf("%c", c);
+            *buffer_changed = 1;
         }
     }
 }
 
-static void editor_poll_keyboard(editor_buffer_t *buf, u8 *save_flag, u8 *exit_flag) {
+static void editor_poll_keyboard(editor_buffer_t *buf, u8 *save_flag, u8 *exit_flag, u8 *buffer_changed) {
     u8 status = inb(0x64);
     if (!(status & 0x01)) return;
     
@@ -149,7 +156,7 @@ static void editor_poll_keyboard(editor_buffer_t *buf, u8 *save_flag, u8 *exit_f
     }
     
     /* Normal key handling */
-    editor_handle_key(buf, scancode, is_pressed, save_flag, exit_flag);
+    editor_handle_key(buf, scancode, is_pressed, save_flag, exit_flag, buffer_changed);
 }
 
 u8 shell_editor(const char *filepath) {
@@ -160,8 +167,7 @@ u8 shell_editor(const char *filepath) {
     
     editor_buffer_t buf = {0};
     u8 save_flag = 0, exit_flag = 0;
-    u8 save_status = 0;
-    u8 redraw = 1;
+    u8 buffer_changed = 0;
     
     /* Load existing content */
     vfs_entry_t *entry = vfs_find(filepath);
@@ -177,35 +183,40 @@ u8 shell_editor(const char *filepath) {
     /* Small delay to show message */
     for (volatile int i = 0; i < 200000; i++);
     
-    while (!exit_flag) {
-        if (redraw) {
-            editor_display(&buf, filepath, save_status);
-            redraw = 0;
+    /* Display header and initial content */
+    vga_clear();
+    kprintf("^X Exit | ^S Save | Galio Text Editor\n");
+    kprintf("File: %s\n", filepath);
+    kprintf("-------------------------------------------\n");
+    
+    if (buf.size == 0) {
+        kprintf("[Empty file - start typing]\n");
+    } else {
+        for (u32 i = 0; i < buf.size; i++) {
+            if (buf.content[i] == '\n') kprintf("\n");
+            else kprintf("%c", buf.content[i]);
         }
-        
-        editor_poll_keyboard(&buf, &save_flag, &exit_flag);
+    }
+    
+    kprintf("\n\n-------------------------------------------\n");
+    kprintf("Cursor position: %u chars\n", buf.size);
+    
+    while (!exit_flag) {
+        editor_poll_keyboard(&buf, &save_flag, &exit_flag, &buffer_changed);
         
         if (save_flag) {
             save_flag = 0;
-            save_status = 1;
-            redraw = 1;
-            editor_display(&buf, filepath, save_status);
+            kprintf("\n>>> SAVING... <<<\n");
             
             if (vfs_write_file(filepath, (u8*)buf.content, buf.size)) {
-                save_status = 2;
-                kprintf("[EDITOR] Saved %u bytes\n", buf.size);
+                kprintf(">>> SAVED! <<<\n");
             } else {
-                save_status = 3;
-                kprintf("[EDITOR] Save failed!\n");
+                kprintf(">>> SAVE FAILED! <<<\n");
             }
-            redraw = 1;
-            
-            /* Pause to show save status */
-            for (volatile int i = 0; i < 300000; i++);
         }
         
         /* Small delay to avoid CPU spinning */
-        for (volatile int i = 0; i < 50; i++);
+        for (volatile int i = 0; i < 100; i++);
     }
     
     vga_clear();

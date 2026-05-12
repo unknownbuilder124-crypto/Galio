@@ -83,8 +83,10 @@ vfs_entry_t *vfs_find(const char *path) {
     if (!vfs_root || !path) return NULL;
     char *norm_path = path_normalize(path);
     vfs_dentry_t *dentry = vfs_core_lookup(norm_path, 0);
-    return build_compat_entry(dentry, norm_path);
+    vfs_entry_t *result = build_compat_entry(dentry, norm_path);
+    return result;
 }
+
 
 u32 vfs_read(const char *path, void *buffer, u32 size) {
     if (!vfs_root) {
@@ -141,19 +143,16 @@ void vfs_listdir(const char *path) {
         kprintf("[VFS] ERROR: Filesystem not mounted\n");
         return;
     }
-
     char *norm_path = path_normalize(path);
     vfs_dentry_t *dentry = vfs_core_lookup(norm_path, 0);
     if (!dentry || !dentry->inode || dentry->inode->mode != VFS_TYPE_DIR) {
         kprintf("[VFS] ERROR: Directory not found: %s\n", path);
         return;
     }
-
     kprintf("Directory listing: %s\n", norm_path);
     u32 dir_count = 0;
     u32 file_count = 0;
     u32 total_dir_size = 0;
-
     for (u32 i = 0; i < dentry->inode->dirent_count; i++) {
         vfs_core_dirent_t *dent = &dentry->inode->dirents[i];
         if (strcmp(dent->name, ".") == 0 || strcmp(dent->name, "..") == 0) continue;
@@ -168,7 +167,6 @@ void vfs_listdir(const char *path) {
             total_dir_size += child->size;
         }
     }
-
     kprintf("    ─────────────────────────────────────────────\n");
     kprintf("    Dirs: %u | Files: %u | Total size: %u bytes\n",
             dir_count, file_count, total_dir_size);

@@ -93,7 +93,6 @@ static void vfs_cache_insert(vfs_dentry_t *entry) {
             return;
         }
     }
-    /* Evict simple linear slot to preserve most recent entries */
     vfs_dentry_cache[idx] = entry;
 }
 
@@ -136,9 +135,7 @@ static vfs_inode_t *vfs_alloc_inode(void) {
 static u32 vfs_allocate_data(u32 bytes) {
     if (!bytes) return 0;
     if (!vfs_data_ram) return 0xFFFFFFFFu;
-    if (vfs_data_top + bytes > vfs_data_ram_size) {
-        return 0xFFFFFFFFu;
-    }
+    if (vfs_data_top + bytes > vfs_data_ram_size) return 0xFFFFFFFFu;
     u32 offset = vfs_data_top;
     vfs_data_top += bytes;
     return offset;
@@ -325,9 +322,12 @@ static vfs_dentry_t *vfs_lookup_internal(const char *path) {
     if (strcmp(normalized, "/") == 0) {
         return vfs_root_dentry;
     }
+    
     vfs_dentry_t *current = vfs_root_dentry;
     const char *cursor = normalized + 1;
-    while (*cursor) {
+    u32 depth = 0;  /* Depth guard to prevent infinite loops */
+    
+    while (*cursor && depth++ < 256) {
         const char *next = cursor;
         while (*next && *next != '/') next++;
         char component[VFS_MAX_FILENAME];
@@ -335,10 +335,17 @@ static vfs_dentry_t *vfs_lookup_internal(const char *path) {
         if (length >= VFS_MAX_FILENAME) length = VFS_MAX_FILENAME - 1;
         memcpy(component, cursor, length);
         component[length] = 0;
+        
         if (strcmp(component, ".") == 0) {
             /* remain */
         } else if (strcmp(component, "..") == 0) {
-            if (current->parent) current = current->parent;
+            /* Parent sanity check - don't go above root or into circular links */
+            if (current->parent && current->parent != current && current->parent != vfs_root_dentry) {
+                current = current->parent;
+            } else if (current != vfs_root_dentry) {
+                /* If we can't go up safely, stay at root */
+                current = vfs_root_dentry;
+            }
         } else {
             if (!current->inode || current->inode->mode != VFS_TYPE_DIR) {
                 return NULL;
@@ -355,6 +362,12 @@ static vfs_dentry_t *vfs_lookup_internal(const char *path) {
         if (*next == 0) break;
         cursor = next + 1;
     }
+    
+    if (depth >= 256) {
+        //kprintf("[VFS] Lookup depth exceeded for path: %s\n", path);
+        return NULL;
+    }
+    
     return current;
 }
 
@@ -366,6 +379,7 @@ static vfs_dentry_t *vfs_lookup_parent_internal(const char *path) {
 }
 
 static vfs_dentry_t *vfs_make_directory_internal(const char *path, u8 force) {
+    (void)force;  /* Parameter kept for API compatibility but not used for directories */
     if (!path) return NULL;
     char normalized[VFS_MAX_PATH];
     vfs_normalize(path, normalized);
@@ -381,7 +395,7 @@ static vfs_dentry_t *vfs_make_directory_internal(const char *path, u8 force) {
         vfs_inode_t *existing = vfs_find_inode_in_dir(parent->inode, name);
         if (!existing) return NULL;
         if (existing->mode == VFS_TYPE_DIR) {
-            return parent; /* already exists */
+            return parent;
         }
         return NULL;
     }
@@ -623,7 +637,6 @@ u32 vfs_core_unlink(const char *path) {
     if (!vfs_dirent_remove(parent->inode, dentry->name)) return 0;
     dentry->inode->link_count--;
     if (dentry->inode->link_count == 0) {
-        /* In practice we do not free data blocks immediately */
         dentry->inode->mode = 0;
     }
     return 1;
@@ -642,9 +655,7 @@ u32 vfs_core_rmdir(const char *path) {
             entries++;
         }
     }
-    if (entries > 0) {
-        return 0;
-    }
+    if (entries > 0) return 0;
     vfs_dentry_t *parent = dentry->parent;
     if (!parent || !parent->inode) return 0;
     if (!vfs_dirent_remove(parent->inode, dentry->name)) return 0;
@@ -652,83 +663,62 @@ u32 vfs_core_rmdir(const char *path) {
     return 1;
 }
 
-/* Read from an open file descriptor */
 u32 vfs_core_read(u32 fd, void *buffer, u32 size) {
     if (fd >= VFS_MAX_FILE_HANDLES) return 0;
     if (!buffer) return 0;
-    
     vfs_file_t *fh = &vfs_files[fd];
     if (!fh->inode || fh->ref_count == 0 || fh->inode->mode != VFS_TYPE_FILE) {
         return 0;
     }
-    
     u32 to_read = size;
-    if (fh->pos >= fh->inode->size) {
-        return 0;  /* EOF */
-    }
-    
+    if (fh->pos >= fh->inode->size) return 0;
     if (fh->pos + to_read > fh->inode->size) {
         to_read = fh->inode->size - fh->pos;
     }
-    
     if (to_read == 0) return 0;
-    
     u32 offset = fh->inode->blocks[0];
     if (offset == 0xFFFFFFFFu) return 0;
-    
     memcpy(buffer, vfs_data_ram + offset + fh->pos, to_read);
     fh->pos += to_read;
     return to_read;
 }
 
-/* Seek within an open file */
 u32 vfs_core_lseek(u32 fd, i32 offset, i32 whence) {
     if (fd >= VFS_MAX_FILE_HANDLES) return (u32)-1;
-    
     vfs_file_t *fh = &vfs_files[fd];
     if (!fh->inode || fh->ref_count == 0 || fh->inode->mode != VFS_TYPE_FILE) {
         return (u32)-1;
     }
-    
     u32 new_pos;
-    
     switch (whence) {
-        case 0:  /* SEEK_SET */
+        case 0:
             new_pos = offset;
             break;
-        case 1:  /* SEEK_CUR */
+        case 1:
             new_pos = fh->pos + offset;
             break;
-        case 2:  /* SEEK_END */
+        case 2:
             new_pos = fh->inode->size + offset;
             break;
         default:
             return (u32)-1;
     }
-    
     fh->pos = new_pos;
     return new_pos;
 }
 
-/* Get file stat information */
 u32 vfs_core_stat(const char *path, void *statbuf) {
     if (!path || !statbuf) return 0;
-    
     vfs_dentry_t *dentry = vfs_core_lookup(path, 0);
-    if (!dentry || !dentry->inode) {
-        return 0;
-    }
-    
-    /* Simple stat structure */
+    if (!dentry || !dentry->inode) return 0;
     typedef struct {
-        u32 mode;      /* File type and permissions */
-        u32 size;      /* File size in bytes */
-        u32 blocks;    /* Number of blocks allocated */
-        u32 atime;     /* Access time */
-        u32 mtime;     /* Modification time */
-        u32 ctime;     /* Creation time */
+        u32 mode;
+        u32 size;
+        u32 blocks;
+        u32 atime;
+        u32 mtime;
+        u32 ctime;
     } simple_stat_t;
-    
     simple_stat_t *stat = (simple_stat_t *)statbuf;
     stat->mode = dentry->inode->mode;
     stat->size = dentry->inode->size;
@@ -736,7 +726,5 @@ u32 vfs_core_stat(const char *path, void *statbuf) {
     stat->atime = dentry->inode->atime;
     stat->mtime = dentry->inode->mtime;
     stat->ctime = dentry->inode->ctime;
-    
     return 1;
 }
-

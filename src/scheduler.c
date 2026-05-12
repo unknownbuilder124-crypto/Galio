@@ -1,29 +1,23 @@
-/* scheduler.c - Round-robin scheduler with time slices */
+/* scheduler.c - Cooperative scheduler (no timer preemption) */
 
 #include "process.h"
 #include "pit.h"
 #include "kprintf.h"
 
-#define TIME_SLICE_TICKS 10  /* 100ms at 100Hz */
-
-static u32 current_ticks = 0;
-
-/* Scheduler tick handler - called by PIT */
+/* Scheduler tick handler - called by PIT but does NOT preempt */
 void scheduler_tick(void) {
+    /* Preemption DISABLED - timer only increments ticks for stats */
     process_t *current = process_current();
-    if (!current) return;
-
-    current->ticks++;
-
-    /* Check if time slice expired */
-    if (current->ticks >= TIME_SLICE_TICKS) {
-        current->ticks = 0;
-        process_yield();
+    if (current) {
+        current->ticks++;
     }
 }
 
-/* Initialize scheduler */
+/* Initialize scheduler - cooperative mode (no automatic preemption) */
 void scheduler_init(void) {
+    /* Install timer callback for statistics ONLY - no context switching */
     pit_install_callback(scheduler_tick);
-    kprintf("Scheduler initialized with %d tick time slices\n", TIME_SLICE_TICKS);
+    kprintf("Scheduler initialized (cooperative mode - no preemption)\n");
+    kprintf("  - Timer running at 100Hz for statistics only\n");
+    kprintf("  - Context switches happen only via explicit yield()\n");
 }

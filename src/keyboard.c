@@ -73,9 +73,6 @@ static void keyboard_handler(registers_t *regs) {
     u8 scancode = inb(KEYBOARD_DATA);
     u8 is_pressed = !(scancode & 0x80);
 
-    /* Debug: print scancode on every key */
-    kprintf("[KBD] scancode=%02x %s\n", scancode, is_pressed ? "DOWN" : "UP");
-
     if (scancode == 0xE0) {
         extended_prefix = 1;
         return;
@@ -119,11 +116,12 @@ void keyboard_init(void) {
     /* Enable PS/2 keyboard port */
     outb(KEYBOARD_CTRL, 0xAE);   /* Enable first PS/2 port */
 
-    /* Install handler on IRQ1 (interrupt 33) */
-    interrupt_install_handler(33, keyboard_handler);
-    irq_unmask(1);
+    /* Shell uses polling mode, so don't install interrupt handler */
+    /* to avoid conflicts with keyboard controller port reads */
+    /* interrupt_install_handler(33, keyboard_handler); */
+    /* irq_unmask(1); */
 
-    kprintf("Keyboard initialized (IRQ1 enabled)\n");
+    kprintf("Keyboard initialized (polling mode)\n");
 }
 
 void keyboard_install_callback(key_callback_t callback) {

@@ -151,9 +151,10 @@ void process_switch(process_t *from, process_t *to) {
     process_switch_asm(&from->regs, &to->regs);
 
 return_point:
-    /* Restore page directory if different */
-    if (from->pagedir != to->pagedir && to->pagedir) {
-        paging_load_directory(to->pagedir);
+    /* Use current_process instead of local vars (they don't exist here) */
+    process_t *restored = current_process;
+    if (restored->pagedir) {
+        paging_load_directory(restored->pagedir);
     }
 }
 

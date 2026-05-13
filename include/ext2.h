@@ -60,6 +60,18 @@ typedef struct {
     u32 osd2[3];
 } ext2_inode_t;
 
+/* Group descriptor structure */
+typedef struct {
+    u32 bg_block_bitmap;
+    u32 bg_inode_bitmap;
+    u32 bg_inode_table;
+    u16 bg_free_blocks_count;
+    u16 bg_free_inodes_count;
+    u16 bg_used_dirs_count;
+    u16 bg_pad;
+    u32 bg_reserved[3];
+} ext2_group_desc_t;
+
 /* Directory entry */
 typedef struct {
     u32 inode;
@@ -83,5 +95,15 @@ i32 ext2_write_block(u32 block_num, const void *buffer);
 
 /* Find inode by path */
 u32 ext2_find_inode(const char *path);
+
+/* Write operations */
+i32 ext2_write_inode(u32 inode_num, ext2_inode_t *inode);
+i32 ext2_create_file(const char *path, u32 mode);
+i32 ext2_create_directory(const char *path, u32 mode);
+i32 ext2_alloc_block(void);
+i32 ext2_alloc_inode(void);
+i32 ext2_add_directory_entry(u32 dir_inode, const char *name, u32 child_inode);
+i32 ext2_update_inode_size(u32 inode_num, u32 new_size);
+i32 ext2_write_data(u32 inode_num, const void *buffer, u32 size);
 
 #endif /* EXT2_H */

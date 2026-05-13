@@ -74,4 +74,7 @@ u32 vfs_core_create_dir(const char *path, u8 force);
 u32 vfs_core_rmdir(const char *path);
 u32 vfs_core_unlink(const char *path);
 
+void vfs_core_init_disk_mode(void);
+u8 vfs_core_is_disk_mode(void);
+
 #endif /* VFS_CORE_H */

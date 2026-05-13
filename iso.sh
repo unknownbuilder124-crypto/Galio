@@ -8,6 +8,8 @@ set -euo pipefail
 OUT_ISO="galio.iso"
 ISO_DIR="iso"
 KERNEL_BIN="galio.bin"
+DISK_IMG="disk.img"
+DISK_SIZE_MB=16
 GRUB_CFG_PATH="${ISO_DIR}/boot/grub/grub.cfg"
 RUN_QEMU=false
 QEMU_ARGS="-m 128M -serial file:serial.log -monitor none -no-reboot"
@@ -45,14 +47,30 @@ menuentry "Galio Kernel" {
 }
 EOF
 
+# create persistent ext2 disk image if needed
+if [ ! -f "${DISK_IMG}" ]; then
+  echo "Creating ${DISK_IMG} (${DISK_SIZE_MB} MB) ..."
+  dd if=/dev/zero of="${DISK_IMG}" bs=1M count="${DISK_SIZE_MB}" status=none
+  if command -v mke2fs >/dev/null 2>&1; then
+    mke2fs -q -F -t ext2 -b 1024 "${DISK_IMG}"
+  elif command -v mkfs.ext2 >/dev/null 2>&1; then
+    mkfs.ext2 -q -F -b 1024 "${DISK_IMG}"
+  else
+    echo "Error: mke2fs or mkfs.ext2 not found. Install e2fsprogs." >&2
+    exit 1
+  fi
+fi
+
 # build ISO
 echo "Creating ${OUT_ISO}..."
 grub-mkrescue -o "${OUT_ISO}" "${ISO_DIR}"
 
 echo "ISO created: ${OUT_ISO}"
 
+echo "Persistent EXT2 disk image: ${DISK_IMG}"
+
 # optionally run QEMU
 if [ "${RUN_QEMU}" = true ]; then
   echo "Starting QEMU with args: ${QEMU_ARGS}"
-  qemu-system-i386 -cdrom "${OUT_ISO}" ${QEMU_ARGS}
+  qemu-system-i386 -cdrom "${OUT_ISO}" -drive file="${DISK_IMG}",format=raw,if=ide,cache=writeback,index=0,media=disk ${QEMU_ARGS}
 fi

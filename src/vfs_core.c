@@ -3,6 +3,7 @@
 #include "kprintf.h"
 #include "pit.h"
 #include "string.h"
+#include "ext2.h"
 
 static vfs_inode_t vfs_inodes[VFS_MAX_INODES];
 static vfs_dentry_t vfs_dentries[VFS_MAX_DENTRIES];
@@ -15,6 +16,7 @@ static u32 vfs_next_inode = 0;
 static u32 vfs_next_dentry = 0;
 static vfs_dentry_t *vfs_root_dentry = NULL;
 static vfs_inode_t *vfs_root_inode = NULL;
+static u8 vfs_disk_mode = 0;  /* 1 if using EXT2, 0 if using RAM */
 
 static void vfs_reset_ram(void) {
     if (vfs_data_ram) {
@@ -593,6 +595,20 @@ u32 vfs_core_write(u32 fd, const void *buffer, u32 size) {
     if (!fh->inode || fh->ref_count == 0 || fh->inode->mode != VFS_TYPE_FILE) {
         return 0;
     }
+
+    if (vfs_disk_mode) {
+        /* Write to disk via EXT2 */
+        if (fh->inode->number < 256) {  /* Check if inode number looks valid */
+            i32 result = ext2_write_data(fh->inode->number, buffer, size);
+            if (result > 0) {
+                fh->inode->size = size;
+                fh->pos = size;
+                return result;
+            }
+        }
+        return 0;
+    }
+
     if (size > 0) {
         u32 offset = vfs_allocate_data(size);
         if (offset == 0xFFFFFFFFu) return 0;
@@ -607,6 +623,27 @@ u32 vfs_core_write(u32 fd, const void *buffer, u32 size) {
 
 u32 vfs_core_read_path(const char *path, void *buffer, u32 size) {
     if (!path || !buffer) return 0;
+    
+    if (vfs_disk_mode) {
+        /* Read from disk via EXT2 */
+        u32 inode_num = ext2_find_inode(path);
+        if (inode_num > 0) {
+            ext2_inode_t inode;
+            if (ext2_read_inode(inode_num, &inode) == 0) {
+                u32 to_read = size;
+                if (to_read > inode.size) to_read = inode.size;
+                if (to_read > 0) {
+                    /* Read first block */
+                    if (inode.block[0] > 0) {
+                        return ext2_read_block(inode.block[0], buffer);
+                    }
+                }
+                return 0;
+            }
+        }
+        return 0;
+    }
+
     vfs_dentry_t *dentry = vfs_core_lookup(path, 0);
     if (!dentry || !dentry->inode || dentry->inode->mode != VFS_TYPE_FILE) {
         return 0;
@@ -621,11 +658,27 @@ u32 vfs_core_read_path(const char *path, void *buffer, u32 size) {
 }
 
 u32 vfs_core_create_file(const char *path, u8 force) {
+    if (vfs_disk_mode) {
+        /* Use EXT2 for disk storage */
+        if (ext2_create_file(path, 0x81A4) > 0) {
+            return 1;
+        }
+        return 0;
+    }
+
     vfs_dentry_t *created = vfs_make_file_internal(path, force, NULL, 0);
     return created != NULL;
 }
 
 u32 vfs_core_create_dir(const char *path, u8 force) {
+    if (vfs_disk_mode) {
+        /* Use EXT2 for disk storage */
+        if (ext2_create_directory(path, 0x41ED) > 0) {
+            return 1;
+        }
+        return 0;
+    }
+
     vfs_dentry_t *created = vfs_make_directory_internal(path, force);
     return created != NULL;
 }
@@ -679,6 +732,29 @@ u32 vfs_core_read(u32 fd, void *buffer, u32 size) {
     if (!fh->inode || fh->ref_count == 0 || fh->inode->mode != VFS_TYPE_FILE) {
         return 0;
     }
+
+    if (vfs_disk_mode && fh->inode->number < 256) {
+        /* Read from disk via EXT2 */
+        ext2_inode_t inode;
+        if (ext2_read_inode(fh->inode->number, &inode) == 0) {
+            u32 to_read = size;
+            if (fh->pos >= inode.size) return 0;
+            if (fh->pos + to_read > inode.size) {
+                to_read = inode.size - fh->pos;
+            }
+            if (to_read > 0 && inode.block[0] > 0) {
+                u8 block_data[4096];  /* Max block size */
+                if (ext2_read_block(inode.block[0], block_data) == 0) {
+                    memcpy(buffer, block_data + fh->pos, to_read);
+                    fh->pos += to_read;
+                    return to_read;
+                }
+            }
+            return 0;
+        }
+        return 0;
+    }
+
     u32 to_read = size;
     if (fh->pos >= fh->inode->size) return 0;
     if (fh->pos + to_read > fh->inode->size) {
@@ -736,4 +812,15 @@ u32 vfs_core_stat(const char *path, void *statbuf) {
     stat->mtime = dentry->inode->mtime;
     stat->ctime = dentry->inode->ctime;
     return 1;
+}
+
+/* Initialize disk mode for persistent filesystem */
+void vfs_core_init_disk_mode(void) {
+    vfs_disk_mode = 1;
+    kprintf("[VFS] Switched to disk-backed mode (EXT2)\n");
+}
+
+/* Check if using disk mode */
+u8 vfs_core_is_disk_mode(void) {
+    return vfs_disk_mode;
 }

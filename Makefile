@@ -35,12 +35,27 @@ $(INITRD_IMAGE): tools/mkiofs
 src/embedded_initrd.o: $(INITRD_IMAGE)
 	objcopy -I binary -O elf32-i386 -B i386 $< $@
 
-.PHONY: all clean run
+.PHONY: all clean run disk
 
-all: galio.bin
+all: galio.bin galio.iso disk.img
 
 galio.bin: $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
+
+disk.img:
+	@echo "Creating 64MB disk image..."
+	@dd if=/dev/zero of=disk.img bs=1M count=64 2>/dev/null || true
+	@command -v mkfs.ext2 >/dev/null 2>&1 && mkfs.ext2 disk.img -q || echo "Warning: mkfs.ext2 not found, disk image created but not formatted"
+	@echo "Disk image created and formatted as ext2"
+
+galio.iso: galio.bin
+	@command -v grub-mkrescue >/dev/null 2>&1 || { echo "Error: grub-mkrescue not found in PATH"; exit 1; }
+	@rm -rf iso
+	@mkdir -p iso/boot/grub
+	@cp galio.bin iso/boot/galio.bin
+	@printf '%s\n' 'set timeout=0' 'set default=0' '' 'menuentry "Galio Kernel" {' '  multiboot /boot/galio.bin' '  boot' '}' > iso/boot/grub/grub.cfg
+	@echo "Creating galio.iso..."
+	@grub-mkrescue -o galio.iso iso
 
 boot/boot.o: boot/boot.S
 	$(CC) $(CFLAGS) -c boot/boot.S -o boot/boot.o
@@ -55,7 +70,8 @@ src/isr_asm.o: src/isr_asm.s
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f galio.bin $(OBJS) tools/mkiofs $(INITRD_IMAGE)
+	rm -f galio.bin galio.iso disk.img $(OBJS) tools/mkiofs $(INITRD_IMAGE)
+	rm -rf iso
 
 run: galio.bin
 	qemu-system-i386 -kernel galio.bin -m 128M -serial stdio

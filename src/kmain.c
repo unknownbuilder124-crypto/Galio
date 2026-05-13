@@ -111,7 +111,14 @@ void kmain(void *multiboot_ptr) {
     ata_init();
 
     kprintf("Initializing EXT2 filesystem...\n");
-    ext2_init();
+    if (ext2_init() == 0) {
+        kprintf("EXT2 partition mounted successfully\n");
+        /* Enable disk-backed filesystem */
+        extern void vfs_core_init_disk_mode(void);
+        vfs_core_init_disk_mode();
+    } else {
+        kprintf("No EXT2 partition found, using RAM filesystem only\n");
+    }
 
     /* Test filesystem output - reduced for clarity */
     kprintf("\n");
@@ -161,7 +168,11 @@ void kmain(void *multiboot_ptr) {
     auth_bootstrap();
 
     vga_clear();
-    kprintf("Welcome to Galio !\n");
+    if (kernel_auth.registered) {
+        kprintf("Welcome \"%s\" to Galio !\n", kernel_auth.username);
+    } else {
+        kprintf("Welcome to Galio !\n");
+    }
     kprintf("Press c to enter GSH....\n\n");
 
     /* ELF test disabled - needs proper kernel virtual address mapping */
